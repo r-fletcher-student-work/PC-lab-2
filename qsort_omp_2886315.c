@@ -56,23 +56,28 @@ void seq_qsort(int p, int r, float *data){
 	}
 }
 
-void par_qsort_sec(int p, int r, float *data, int low_limit){
+void par_qsort_sec(int p, int r, float *data, int low_limit, int depth){
     if (p >= r) return;
 
 	int q = partition(p, r, data);
-	if (r - p < low_limit) {
-		par_qsort_sec(p, q-1, data, low_limit);
-		par_qsort_sec(q+1, r, data, low_limit);
-		return;
-	}
 
-	#pragma omp parallel
-	#pragma omp sections nowait
-	{
-		#pragma omp section
-		par_qsort_sec(p, q-1, data, low_limit);
-		#pragma omp section
-		par_qsort_sec(q+1, r, data, low_limit);
+	if (r - p < low_limit || depth>4) {
+		seq_qsort(p, q-1, data);
+		seq_qsort(q+1, r, data);
+	} else {
+		#pragma omp parallel sections
+		{
+			#pragma omp section 
+			{
+				par_qsort_sec(p, q-1, data, low_limit, depth+1);
+			}
+			
+			#pragma omp section 
+			{
+				par_qsort_sec(q+1, r, data, low_limit, depth+1);
+			}
+			
+		}
 	}
 }
 
@@ -138,7 +143,7 @@ int main(int argc, char *argv[]){
 	omp_set_nested(1);
     start=omp_get_wtime();
 	
-    par_qsort_sec(0, n-1, &data[0], low_limit);
+    par_qsort_sec(0, n-1, &data[0], low_limit, 0);
     
 	p_time_1=omp_get_wtime() - start;
     omp_set_nested(0);

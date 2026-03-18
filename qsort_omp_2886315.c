@@ -117,7 +117,7 @@ int main(int argc, char *argv[]){
 	float *data;
 	//clock_t start, end;
 //	struct timespec start, end;
-    double start, s_time=0.0, p_time_1=0.0, p_time_2=0.0;
+    double start, s_time=0.0, p_time_1=0.0, p_time_2_4=0.0, p_time_2_8=0.0;
 	if(argc != 3){
 		printf("a.out num_elems low_limit\n");
 		return 1;
@@ -154,6 +154,7 @@ int main(int argc, char *argv[]){
 	}
 
     printf("Task parallel sorting: ");
+	omp_set_num_threads(4);
     start=omp_get_wtime();
     
 	#pragma omp parallel
@@ -164,14 +165,34 @@ int main(int argc, char *argv[]){
 		}
 	}
 	
-	p_time_2=omp_get_wtime() - start;
+	p_time_2_4=omp_get_wtime() - start;
 	validate_sort(n, &data[0]);
+	
+	//8 cores
+	for(i=0; i<n; i++){
+		data[i]=1.1*rand()*5000/RAND_MAX;
+	}
+
+	omp_set_num_threads(8);
+    start=omp_get_wtime();
+    
+	#pragma omp parallel
+	{
+		#pragma omp single
+		{
+			par_qsort_task(0, n-1, &data[0], low_limit);
+		}
+	}
+	
+	p_time_2_8=omp_get_wtime() - start;
 
 	printf("Sequential time: %lf s\n", s_time);
 	printf("SECTIONS/SECTION Parallel time: %lf s\n", p_time_1);
-    printf("TASK Parallel time: %lf s\n", p_time_2);
-	printf("SECTIONS/SECTION Parallel speedup: %f s\n", s_time/p_time_1);
-    printf("TASK Parallel speedup: %f s\n", s_time/p_time_2);
+    printf("TASK Parallel 4 thread time: %lf s\n", p_time_2_4);
+	printf("TASK Parallel 8 thread time: %lf s\n", p_time_2_8);
+	printf("SECTIONS/SECTION Parallel speedup: %f\n", s_time/p_time_1);
+    printf("TASK Parallel 4 thread speedup: %f\n", s_time/p_time_2_4);
+	printf("TASK Parallel 8 thread speedup: %f\n", s_time/p_time_2_8);
 	printf("Done\n");
 	free(data);
 	return 0;

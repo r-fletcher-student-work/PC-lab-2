@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
-#include <time.h>
 #include <omp.h>
 #define BILLION  1000000000L;
 //int floatcompare(const void *p1, const void *p2){
@@ -61,14 +60,18 @@ void par_qsort_sec(int p, int r, float *data, int low_limit){
         int q = partition(p, r, data);
 
         if ((r - p) > low_limit) {
-            #pragma omp parallel sections num_threads(2)
+            #pragma omp parallel
+            #pragma omp sections nowait
             {
                 #pragma omp section
-                par_qsort_sec(p, q-1, data, low_limit);
+                {
+                    par_qsort_sec(p, q-1, data, low_limit);
+                }
 
                 #pragma omp section
-                par_qsort_sec(q+1, r, data, low_limit);
-
+                {
+                    par_qsort_sec(q+1, r, data, low_limit);
+                }
             }
         } else {
             seq_qsort(p, q-1, data);
@@ -77,8 +80,22 @@ void par_qsort_sec(int p, int r, float *data, int low_limit){
     }
 }
 
-void par_qsort_task(){
-    ;
+void par_qsort_task(int p, int r, float *data, int low_limit){
+    if (p < r) {
+        int q = partition(p, r, data);
+
+        if ((r - p) > low_limit) {
+            #pragma omp task shared(data)
+            par_qsort_task(p, q-1, data, low_limit);
+
+            #pragma omp task shared(data)
+            par_qsort_task(q+1, r, data, low_limit);
+
+        } else {
+            seq_qsort(p, q-1, data);
+		    seq_qsort(q+1, r, data);
+        }
+    }
 }
 
 void validate_sort(int n, float *data){
@@ -106,8 +123,7 @@ int main(int argc, char *argv[]){
 	}
 	n=atoi(argv[1]);
 	low_limit=atoi(argv[2]);
-    /* set core count omp */
-    omp_set_num_threads(4);
+
 	/*generate the array*/
 	data=(float*)malloc(sizeof(float)*n);
     srand(2024);
@@ -136,8 +152,8 @@ int main(int argc, char *argv[]){
 	omp_set_nested(1);
     start=omp_get_wtime();
 
-	par_qsort_sec(0,n-1,&data[0], low_limit);    
-    
+	par_qsort_sec(0,n-1,&data[0], low_limit);  
+
 	p_time_1=omp_get_wtime() - start;
     validate_sort(n, &data[0]);
     //==============================================
@@ -148,13 +164,21 @@ int main(int argc, char *argv[]){
     */
     for(i=0; i<n; i++){
 		data[i]=1.1*rand()*5000/RAND_MAX;
-	}  
+	}
 
     printf("Task parallel sorting: ");
-        omp_set_nested(0);
+    omp_set_nested(0);
     start=omp_get_wtime();
 
-
+    omp_set_num_threads(8);
+    #pragma omp parallel
+    {
+        #pragma omp single 
+        {
+            par_qsort_task(0, n-1, &data[0], low_limit);
+            #pragma omp taskwait
+        }
+    }
 
 	p_time_2=omp_get_wtime() - start;
 	validate_sort(n, &data[0]);

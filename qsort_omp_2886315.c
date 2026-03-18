@@ -56,11 +56,27 @@ void seq_qsort(int p, int r, float *data){
 	}
 }
 
-//COMPLETE THE PARALLEL QUICKSORT USING SECTIONS/SECTION CONSTRUCT
-void par_qsort_sec(){
-	;
+void par_qsort_sec(int p, int r, float *data, int low_limit){
+    if (p < r) {
+        int q = partition(p, r, data);
+
+        if ((r - p) > low_limit) {
+            #pragma omp parallel sections num_threads(2)
+            {
+                #pragma omp section
+                par_qsort_sec(p, q-1, data, low_limit);
+
+                #pragma omp section
+                par_qsort_sec(q+1, r, data, low_limit);
+
+            }
+        } else {
+            seq_qsort(p, q-1, data);
+		    seq_qsort(q+1, r, data);
+        }
+    }
 }
-//COMPLETE THE PARALLEL QUICKSORT USING TASK CONSTRUCT
+
 void par_qsort_task(){
     ;
 }
@@ -90,9 +106,15 @@ int main(int argc, char *argv[]){
 	}
 	n=atoi(argv[1]);
 	low_limit=atoi(argv[2]);
+    /* set core count omp */
+    omp_set_num_threads(4);
 	/*generate the array*/
 	data=(float*)malloc(sizeof(float)*n);
     srand(2024);
+
+    /*==============================================
+    *               SEQUENTIAL SORT
+    */
 	for(i=0; i<n; i++){
 		data[i]=1.1*rand()*5000/RAND_MAX;
 	}
@@ -100,7 +122,12 @@ int main(int argc, char *argv[]){
 	start=omp_get_wtime();
 	seq_qsort(0,n-1,&data[0]);
 	s_time=omp_get_wtime() - start;
+    //==============================================
 
+
+    /*==============================================
+    *           PARALLEL SECTIONS SORT
+    */
 	for(i=0; i<n; i++){
 		data[i]=1.1*rand()*5000/RAND_MAX;
 	}
@@ -108,32 +135,37 @@ int main(int argc, char *argv[]){
     printf("Sections/section parallel sorting: ");
 	omp_set_nested(1);
     start=omp_get_wtime();
-    //CALL THE PARALLEL QUICKSORT USING SECTION/SECTION CONSTRUCT HERE
-	
-    
+
+	par_qsort_sec(0,n-1,&data[0], low_limit);    
     
 	p_time_1=omp_get_wtime() - start;
-    omp_set_nested(0);
-	validate_sort(n, &data[0]);
+    validate_sort(n, &data[0]);
+    //==============================================
+
     
+    /*==============================================
+    *           PARALLEL TASKS SORT
+    */
     for(i=0; i<n; i++){
 		data[i]=1.1*rand()*5000/RAND_MAX;
 	}  
 
     printf("Task parallel sorting: ");
+        omp_set_nested(0);
     start=omp_get_wtime();
-    //CALL THE PARALLEL QUICKSORT USING TASK CONSTRUCT HERE
-    
-    
-	
+
+
+
 	p_time_2=omp_get_wtime() - start;
 	validate_sort(n, &data[0]);
+    //==============================================
+
 
 	printf("Sequential time: %lf s\n", s_time);
 	printf("SECTIONS/SECTION Parallel time: %lf s\n", p_time_1);
     printf("TASK Parallel time: %lf s\n", p_time_2);
-	printf("SECTIONS/SECTION Parallel speedup: %f s\n", s_time/p_time_1);
-    printf("TASK Parallel speedup: %f s\n", s_time/p_time_2);
+	printf("SECTIONS/SECTION Parallel speedup: %f\n", s_time/p_time_1);
+    printf("TASK Parallel speedup: %f\n", s_time/p_time_2);
 	printf("Done\n");
 	free(data);
 	return 0;
